@@ -1,0 +1,32 @@
+# Maven build output
+target/
+*.war
+*.jar
+
+# Compiled class files
+*.class
+
+# Logs
+*.log
+logs/
+
+# IDE / editor
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code local config (machine-specific permissions)
+.claude/settings.local.json
+
+# Local secrets / environment (never commit these)
+.env
+*.key
+*.pem

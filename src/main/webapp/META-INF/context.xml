@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Tomcat context config: set SameSite=Lax on the session cookie as an
+     additional layer of CSRF defence (alongside CsrfFilter). -->
+<Context>
+    <CookieProcessor sameSiteCookies="lax"/>
+</Context>
