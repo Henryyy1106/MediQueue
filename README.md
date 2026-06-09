@@ -7,6 +7,27 @@ AI-Powered Smart Public Clinic Queue & Appointment System — a Jakarta EE web a
 
 > SWE3024 Code Camp · Sunway University
 
+## Quick start (teammates)
+
+The easiest way to run it on any OS — only [Docker Desktop](https://www.docker.com/products/docker-desktop/) required (no Java/Maven/MySQL needed):
+
+```bash
+git clone https://github.com/Henryyy1106/MediQueue.git
+cd MediQueue
+docker compose up --build
+```
+
+First run takes a few minutes (it downloads images and builds). When Tomcat prints *"Server startup..."*, open **http://localhost:8080/mediqueue/** and log in:
+
+| Role    | Email                | Password   |
+|---------|----------------------|------------|
+| Patient | patient@mediqueue.my | patient123 |
+| Admin   | admin@mediqueue.my   | admin123   |
+
+Stop with `Ctrl+C`, then `docker compose down` (add `-v` to also wipe the database).
+
+> Notes: Docker uses ports **8080** and **3307** — free them if they're in use. AI features run in fallback mode with no setup; for live AI, `export CLAUDE_API_KEY="..."` before running. Prefer no Docker? See [Run it](#run-it) for the Mac-script and manual options.
+
 ## Features
 
 - **Patient:** registration/login, clinic search, appointment booking, live queue status, visit history, profile, clinic ratings
