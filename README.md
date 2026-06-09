@@ -93,3 +93,7 @@ sql/               Database schema + seed data
 
 - Default DB credentials and seed accounts are for local development only — do not use them in production.
 - AI features degrade gracefully (keyword-based fallbacks) when no API key is present.
+
+## License
+
+Released under the [MIT License](LICENSE).
