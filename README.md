@@ -1,6 +1,7 @@
 # MediQueue
 
 [![CI](https://github.com/Henryyy1106/MediQueue/actions/workflows/ci.yml/badge.svg)](https://github.com/Henryyy1106/MediQueue/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 AI-Powered Smart Public Clinic Queue & Appointment System — a Jakarta EE web app for Malaysian public clinics. Patients can find clinics, book appointments, join a live queue, and rate their visits; an AI helper (Claude) assists with urgency triage, clinic recommendations, pre-visit care tips, and a chat assistant.
 
