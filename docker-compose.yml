@@ -1,0 +1,33 @@
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mediqueue
+    ports:
+      - "3307:3306"            # host:container — handy for connecting a DB tool
+    volumes:
+      - ./sql/mediqueue_schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MEDIQUEUE_DB_URL: "jdbc:mysql://db:3306/mediqueue?useSSL=false&serverTimezone=Asia/Kuala_Lumpur&allowPublicKeyRetrieval=true"
+      MEDIQUEUE_DB_USERNAME: root
+      MEDIQUEUE_DB_PASSWORD: root
+      # Optional: live AI. Without it, AI features run in fallback mode.
+      CLAUDE_API_KEY: "${CLAUDE_API_KEY:-}"
+    ports:
+      - "8080:8080"
+
+volumes:
+  dbdata:

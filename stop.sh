@@ -2,8 +2,9 @@
 # MediQueue - stop the local stack (Tomcat + isolated MySQL).
 MQ_HOME="$HOME/mediqueue"
 SOCK="$MQ_HOME/mysql.sock"
-CATBASE=/opt/homebrew/opt/tomcat/libexec
-MYSQLADMIN=/opt/homebrew/opt/mysql/bin/mysqladmin
+BREW="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+CATBASE="$BREW/opt/tomcat/libexec"
+MYSQLADMIN="$BREW/opt/mysql/bin/mysqladmin"
 export JAVA_HOME="$(/usr/libexec/java_home)"
 
 echo "==> Stopping Tomcat"

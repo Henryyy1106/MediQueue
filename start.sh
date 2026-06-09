@@ -11,10 +11,12 @@ PIDFILE="$MQ_HOME/mysql.pid"
 ERRLOG="$MQ_HOME/mysql.err"
 PORT=3307
 KEYFILE="$HOME/.mediqueue_key"
-MYSQLD=/opt/homebrew/opt/mysql/bin/mysqld
-MYSQL=/opt/homebrew/opt/mysql/bin/mysql
-MYSQLADMIN=/opt/homebrew/opt/mysql/bin/mysqladmin
-CATBASE=/opt/homebrew/opt/tomcat/libexec
+# Homebrew prefix: /opt/homebrew on Apple Silicon, /usr/local on Intel Macs.
+BREW="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+MYSQLD="$BREW/opt/mysql/bin/mysqld"
+MYSQL="$BREW/opt/mysql/bin/mysql"
+MYSQLADMIN="$BREW/opt/mysql/bin/mysqladmin"
+CATBASE="$BREW/opt/tomcat/libexec"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCHEMA="$PROJECT_DIR/sql/mediqueue_schema.sql"
 WAR="$PROJECT_DIR/target/mediqueue.war"
@@ -29,7 +31,7 @@ echo "==> MediQueue stack starting..."
 mkdir -p "$MQ_HOME"
 if [ ! -d "$DATADIR/mysql" ]; then
   echo "==> Initializing fresh MySQL datadir at $DATADIR"
-  "$MYSQLD" --initialize-insecure --datadir="$DATADIR" --basedir=/opt/homebrew/opt/mysql
+  "$MYSQLD" --initialize-insecure --datadir="$DATADIR" --basedir="$BREW/opt/mysql"
   NEED_BOOTSTRAP=1
 fi
 
@@ -37,7 +39,7 @@ if "$MYSQLADMIN" --socket="$SOCK" -u root -proot ping >/dev/null 2>&1; then
   echo "==> MySQL already running on $SOCK"
 else
   echo "==> Starting MySQL on port $PORT"
-  "$MYSQLD" --datadir="$DATADIR" --basedir=/opt/homebrew/opt/mysql \
+  "$MYSQLD" --datadir="$DATADIR" --basedir="$BREW/opt/mysql" \
     --port=$PORT --socket="$SOCK" --mysqlx=0 \
     --pid-file="$PIDFILE" --log-error="$ERRLOG" >/dev/null 2>&1 &
   # wait until it answers

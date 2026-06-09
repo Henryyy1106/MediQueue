@@ -21,10 +21,9 @@ AI-Powered Smart Public Clinic Queue & Appointment System — a Jakarta EE web a
 
 ## Prerequisites
 
-- JDK 11+ and Maven 3.6+
-- MySQL 8
-- A Servlet 5.0+ container — Apache **Tomcat 11** is recommended
-- *(Optional)* a Claude API key for live AI features (the app runs with graceful fallbacks without one)
+- **Easiest:** just **Docker** — see [Option A](#option-a--docker-any-os-recommended-for-teammates) (no local Java/MySQL/Tomcat needed).
+- **Without Docker:** JDK 11+, Maven 3.6+, MySQL 8, and a Servlet 5.0+ container (**Tomcat 11** recommended).
+- *(Optional)* a Claude API key for live AI features — the app runs with graceful fallbacks without one.
 
 ## Setup
 
@@ -43,19 +42,42 @@ AI-Powered Smart Public Clinic Queue & Appointment System — a Jakarta EE web a
    export CLAUDE_API_KEY="your-key-here"
    ```
 
-## Build & run
+## Run it
+
+Pick whichever fits your machine. All three serve the app at **http://localhost:8080/mediqueue/**.
+
+### Option A — Docker (any OS, recommended for teammates)
+
+The only requirement is Docker Desktop. This builds the app, starts MySQL, loads the schema, and runs Tomcat — one command, no local Java/Maven/MySQL needed:
 
 ```bash
-mvn clean package          # produces target/mediqueue.war
+docker compose up --build
 ```
 
-Deploy `target/mediqueue.war` to Tomcat, then open: http://localhost:8080/mediqueue/
+Stop with `Ctrl+C`, or `docker compose down` (add `-v` to also wipe the database). To enable live AI, export `CLAUDE_API_KEY` before running.
 
-**Local helper scripts** (macOS, Homebrew Tomcat + an isolated MySQL on port 3307):
+### Option B — Helper scripts (macOS + Homebrew)
+
+Requires `brew install mysql tomcat maven` and a JDK. Spins up an isolated MySQL on port 3307, loads the schema, builds, and deploys automatically:
+
 ```bash
-./start.sh    # builds, starts MySQL + Tomcat, deploys the WAR
-./stop.sh     # shuts everything down
+./start.sh    # build + start MySQL + Tomcat + deploy
+./stop.sh     # shut everything down
 ```
+
+### Option C — Manual (any OS)
+
+1. Install **MySQL 8**, **Maven**, a **JDK 11+**, and **Tomcat 11**.
+2. Create the database and load the schema:
+   ```bash
+   mysql -u root -p < sql/mediqueue_schema.sql
+   ```
+3. Build the WAR:
+   ```bash
+   mvn clean package          # -> target/mediqueue.war
+   ```
+4. Tell the app how to reach your database (if it isn't the default `root@localhost:3306`) via env vars or `-D` system properties — see [Setup](#setup).
+5. Copy `target/mediqueue.war` into Tomcat's `webapps/` and start Tomcat.
 
 ## Default seed logins
 
