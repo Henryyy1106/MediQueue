@@ -20,6 +20,7 @@ public class Appointment {
     private String status; // pending, confirmed, cancelled, completed
     private String urgencyLevel; // routine, urgent, emergency
     private String aiNotes;
+    private String adminNotes;
     private Timestamp createdAt;
     private Timestamp updatedAt;
 
@@ -60,6 +61,9 @@ public class Appointment {
 
     public String getAiNotes() { return aiNotes; }
     public void setAiNotes(String aiNotes) { this.aiNotes = aiNotes; }
+
+    public String getAdminNotes() { return adminNotes; }
+    public void setAdminNotes(String adminNotes) { this.adminNotes = adminNotes; }
 
     public Timestamp getCreatedAt() { return createdAt; }
     public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }

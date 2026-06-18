@@ -75,6 +75,25 @@ public class VisitHistoryDAO {
         }
     }
 
+    public VisitHistory getVisitByApptId(int apptId) throws SQLException {
+        String sql = "SELECT vh.*, c.name AS clinic_name, u.name AS patient_name, a.time_slot " +
+                "FROM visit_history vh JOIN clinics c ON vh.clinic_id = c.clinic_id " +
+                "JOIN users u ON vh.user_id = u.user_id " +
+                "LEFT JOIN appointments a ON vh.appt_id = a.appt_id " +
+                "WHERE vh.appt_id = ? LIMIT 1";
+        Connection conn = null;
+        try {
+            conn = DatabaseConnection.getConnection();
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setInt(1, apptId);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) return mapResultSet(rs);
+            return null;
+        } finally {
+            DatabaseConnection.closeConnection(conn);
+        }
+    }
+
     private VisitHistory mapResultSet(ResultSet rs) throws SQLException {
         VisitHistory v = new VisitHistory();
         v.setVisitId(rs.getInt("visit_id"));

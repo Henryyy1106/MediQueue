@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS appointments (
     status ENUM('pending', 'confirmed', 'cancelled', 'completed') DEFAULT 'pending',
     urgency_level ENUM('routine', 'urgent', 'emergency') DEFAULT 'routine',
     ai_notes TEXT,
+    admin_notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
@@ -131,6 +132,15 @@ CREATE TABLE IF NOT EXISTS clinic_stats (
     UNIQUE KEY unique_stat (clinic_id, stat_date, hour_slot)
 );
 
+-- App settings table
+CREATE TABLE IF NOT EXISTS app_settings (
+    setting_key VARCHAR(100) PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    setting_label VARCHAR(150) NOT NULL,
+    setting_description TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Sample users use BCrypt hashes to match PasswordUtil (passwords: admin123 / patient123)
 INSERT INTO users (name, email, password_hash, role, phone) VALUES
 ('Admin MediQueue', 'admin@mediqueue.my', '$2a$12$HpARNHov7gKWUN6391vdqerhm0kiZr42fAtTmmpJIviqd7QDLHSey', 'admin', '03-12345678'),
@@ -159,3 +169,13 @@ INSERT INTO clinic_stats (clinic_id, stat_date, hour_slot, avg_wait_mins, patien
 (3, CURDATE(), 8, 20, 12), (3, CURDATE(), 9, 35, 22), (3, CURDATE(), 10, 45, 28),
 (4, CURDATE(), 8, 28, 16), (4, CURDATE(), 9, 42, 26), (4, CURDATE(), 10, 52, 33),
 (5, CURDATE(), 8, 22, 14), (5, CURDATE(), 9, 38, 24), (5, CURDATE(), 10, 48, 30);
+
+INSERT INTO app_settings (setting_key, setting_value, setting_label, setting_description) VALUES
+('appointment.max_per_slot', '5', 'Appointment Slot Limit', 'Maximum number of bookings allowed for a single clinic time slot.'),
+('queue.default_minutes_per_patient', '10', 'Queue Minutes Per Patient', 'Default number of minutes used to estimate queue waiting time per patient.'),
+('session.timeout_minutes_display', '30', 'Session Timeout Display', 'Admin-facing display value for the configured session timeout in minutes.'),
+('ai.fallback_disclaimer', 'This is for guidance only. Consult a qualified doctor for medical advice.', 'AI Fallback Disclaimer', 'Shown in AI fallback responses when health-related advice is provided.'),
+('ai.help_message', 'AI features are temporarily unavailable. Please contact clinic staff for assistance.', 'AI Help Message', 'Fallback message used when the assistant cannot provide a live response.')
+ON DUPLICATE KEY UPDATE
+setting_label = VALUES(setting_label),
+setting_description = VALUES(setting_description);

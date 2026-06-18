@@ -20,6 +20,8 @@
     <ul class="navbar-nav">
         <li><a href="${pageContext.request.contextPath}/admin/dashboard" class="nav-link"><i class="fi fi-ss-chart-histogram"></i> Dashboard</a></li>
         <li><a href="${pageContext.request.contextPath}/admin/queue" class="nav-link"><i class="fi fi-ss-list"></i> Queue Panel</a></li>
+        <li><a href="${pageContext.request.contextPath}/admin/users" class="nav-link"><i class="fi fi-ss-users-alt"></i> Users</a></li>
+        <li><a href="${pageContext.request.contextPath}/admin/appointments" class="nav-link"><i class="fi fi-ss-calendar"></i> Appointments</a></li>
         <li><a href="${pageContext.request.contextPath}/admin/reports" class="nav-link"><i class="fi fi-ss-chart-line-up"></i> Reports</a></li>
     </ul>
 

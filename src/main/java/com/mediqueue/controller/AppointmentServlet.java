@@ -107,6 +107,13 @@ public class AppointmentServlet extends HttpServlet {
         }
 
         Date apptDate = Date.valueOf(dateStr);
+        if (apptDate.before(new Date(System.currentTimeMillis()))) {
+            req.setAttribute("error", "Appointment date cannot be in the past.");
+            List<Clinic> clinics = clinicDAO.getAllClinics();
+            req.setAttribute("clinics", clinics);
+            req.getRequestDispatcher("/WEB-INF/views/patient/book_appointment.jsp").forward(req, resp);
+            return;
+        }
 
         // Check slot availability
         if (apptDAO.isTimeSlotTaken(clinicId, apptDate, timeSlot)) {
@@ -172,6 +179,7 @@ public class AppointmentServlet extends HttpServlet {
         int apptId = Integer.parseInt(req.getParameter("apptId"));
         boolean success = apptDAO.cancelAppointment(apptId, user.getUserId());
         if (success) {
+            queueDAO.removeQueueByApptId(apptId);
             resp.sendRedirect(req.getContextPath() + "/patient/appointments?cancelled=true");
         } else {
             resp.sendRedirect(req.getContextPath() + "/patient/appointments?error=cancel_failed");
