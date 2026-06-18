@@ -220,6 +220,20 @@ SET @a_isaac_tomorrow = (
     ORDER BY appt_id DESC LIMIT 1
 );
 
+-- Curated queue rows for the named demo patients power the admin queue panel and
+-- dashboard queue cards. These are inserted first so they keep their narrative
+-- positions (1/2), and the bulk rows below are offset past them per clinic/date
+-- to avoid duplicate positions within the same clinic and queue date.
+INSERT INTO queue (clinic_id, appt_id, user_id, position, status, estimated_wait_mins, queue_date, called_at, completed_at) VALUES
+(@c_taman_jaya, @a_aisyah_today, @u_aisyah, 1, 'waiting', 10, CURDATE(), NULL, NULL),
+(@c_taman_jaya, @a_daniel_today, @u_daniel, 2, 'in_progress', 20, CURDATE(), NOW(), NULL),
+(@c_ss2, @a_farah_today, @u_farah, 1, 'waiting', 10, CURDATE(), NULL, NULL),
+(@c_shah_alam, @a_gavin_today, @u_gavin, 1, 'done', 15, CURDATE(), DATE_SUB(NOW(), INTERVAL 90 MINUTE), DATE_SUB(NOW(), INTERVAL 40 MINUTE)),
+(@c_kelana_jaya, @a_hani_yesterday, @u_hani, 1, 'done', 12, DATE_SUB(CURDATE(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 23 HOUR)),
+(@c_subang_jaya, @a_isaac_tomorrow, @u_isaac, 1, 'waiting', 10, DATE_ADD(CURDATE(), INTERVAL 1 DAY), NULL, NULL);
+
+-- Bulk queue rows, offset past any existing position for the same clinic/date so
+-- they never collide with the curated rows above.
 INSERT INTO queue (clinic_id, appt_id, user_id, position, status, estimated_wait_mins, queue_date, called_at, completed_at)
 SELECT
     seeded.clinic_id,
@@ -249,20 +263,19 @@ FROM (
         a.clinic_id,
         a.appt_date,
         a.status,
-        ROW_NUMBER() OVER (PARTITION BY a.clinic_id, a.appt_date ORDER BY a.appt_id) AS position
+        COALESCE(existing.max_position, 0)
+            + ROW_NUMBER() OVER (PARTITION BY a.clinic_id, a.appt_date ORDER BY a.appt_id) AS position
     FROM appointments a
+    LEFT JOIN (
+        SELECT clinic_id, queue_date, MAX(position) AS max_position
+        FROM queue
+        GROUP BY clinic_id, queue_date
+    ) existing
+        ON existing.clinic_id = a.clinic_id
+       AND existing.queue_date = a.appt_date
     WHERE a.reason LIKE '[DEMO-BULK %'
       AND a.status <> 'cancelled'
 ) seeded;
-
--- Queue data powers the admin queue panel and dashboard queue cards.
-INSERT INTO queue (clinic_id, appt_id, user_id, position, status, estimated_wait_mins, queue_date, called_at, completed_at) VALUES
-(@c_taman_jaya, @a_aisyah_today, @u_aisyah, 1, 'waiting', 10, CURDATE(), NULL, NULL),
-(@c_taman_jaya, @a_daniel_today, @u_daniel, 2, 'in_progress', 20, CURDATE(), NOW(), NULL),
-(@c_ss2, @a_farah_today, @u_farah, 1, 'waiting', 10, CURDATE(), NULL, NULL),
-(@c_shah_alam, @a_gavin_today, @u_gavin, 1, 'done', 15, CURDATE(), DATE_SUB(NOW(), INTERVAL 90 MINUTE), DATE_SUB(NOW(), INTERVAL 40 MINUTE)),
-(@c_kelana_jaya, @a_hani_yesterday, @u_hani, 1, 'done', 12, DATE_SUB(CURDATE(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 23 HOUR)),
-(@c_subang_jaya, @a_isaac_tomorrow, @u_isaac, 1, 'waiting', 10, DATE_ADD(CURDATE(), INTERVAL 1 DAY), NULL, NULL);
 
 -- Completed visits feed the reports page and patient visit history.
 INSERT INTO visit_history (user_id, clinic_id, appt_id, visit_date, actual_wait_mins, outcome, doctor_notes, ai_summary) VALUES
