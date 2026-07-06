@@ -77,6 +77,7 @@ public class AdminDashboardServlet extends HttpServlet {
             List<ClinicLoadMetric> clinicMetrics = buildClinicLoadMetrics(clinics, todayQueue);
             List<VisitHistory> recentVisits = allVisits.stream().limit(4).collect(Collectors.toList());
             List<Queue> priorityQueue = todayQueue.stream().limit(5).collect(Collectors.toList());
+            TrendOverview operationsOverview = buildOperationsOverview(operationsTrend);
 
             req.setAttribute("todayQueue", todayQueue);
             req.setAttribute("priorityQueue", priorityQueue);
@@ -94,6 +95,7 @@ public class AdminDashboardServlet extends HttpServlet {
             req.setAttribute("urgentCount", urgentCount);
             req.setAttribute("operationsTrend", operationsTrend);
             req.setAttribute("operationsChartSvg", buildDualLineChartSvg(operationsTrend, "#8b5cf6", "#22c55e"));
+            req.setAttribute("operationsOverview", operationsOverview);
             req.setAttribute("waitTrend", waitTrend);
             req.setAttribute("waitChartSvg", buildSingleLineChartSvg(waitTrend, "#38bdf8"));
             req.setAttribute("statusMetrics", statusMetrics);
@@ -111,7 +113,7 @@ public class AdminDashboardServlet extends HttpServlet {
         Map<LocalDate, Integer> appointmentCounts = new LinkedHashMap<>();
         Map<LocalDate, Integer> completionCounts = new LinkedHashMap<>();
 
-        for (int i = 6; i >= 0; i--) {
+        for (int i = 29; i >= 0; i--) {
             LocalDate day = today.minusDays(i);
             appointmentCounts.put(day, 0);
             completionCounts.put(day, 0);
@@ -150,6 +152,21 @@ public class AdminDashboardServlet extends HttpServlet {
         return points;
     }
 
+    private TrendOverview buildOperationsOverview(List<TrendPoint> points) {
+        int bookedTotal = points.stream().mapToInt(TrendPoint::getPrimaryValue).sum();
+        int completedTotal = points.stream().mapToInt(TrendPoint::getSecondaryValue).sum();
+        TrendPoint peakBooked = points.stream().max(Comparator.comparingInt(TrendPoint::getPrimaryValue)).orElse(new TrendPoint("-", 0, 0));
+        TrendPoint peakCompleted = points.stream().max(Comparator.comparingInt(TrendPoint::getSecondaryValue)).orElse(new TrendPoint("-", 0, 0));
+        return new TrendOverview(
+                bookedTotal,
+                completedTotal,
+                peakBooked.getLabel(),
+                peakBooked.getPrimaryValue(),
+                peakCompleted.getLabel(),
+                peakCompleted.getSecondaryValue()
+        );
+    }
+
     private List<SingleTrendPoint> buildWaitTrend(List<VisitHistory> visits, LocalDate today) {
         Map<LocalDate, List<Integer>> waitBuckets = new LinkedHashMap<>();
         for (int i = 6; i >= 0; i--) {
@@ -174,7 +191,9 @@ public class AdminDashboardServlet extends HttpServlet {
             int avg = waits.isEmpty()
                     ? 0
                     : (int) Math.round(waits.stream().mapToInt(Integer::intValue).average().orElse(0));
-            points.add(new SingleTrendPoint(formatter.format(entry.getKey()), avg));
+            int min = waits.isEmpty() ? 0 : waits.stream().mapToInt(Integer::intValue).min().orElse(0);
+            int max = waits.isEmpty() ? 0 : waits.stream().mapToInt(Integer::intValue).max().orElse(0);
+            points.add(new SingleTrendPoint(formatter.format(entry.getKey()), avg, waits.size(), min, max));
         }
         return points;
     }
@@ -246,13 +265,14 @@ public class AdminDashboardServlet extends HttpServlet {
         return "<svg viewBox=\"0 0 " + width + " " + height + "\" class=\"analytics-chart\" role=\"img\" aria-label=\"Operations trend chart\">"
                 + buildGridLines(width, height, left, right, top, bottom)
                 + buildYAxisLabels(maxValue, left, top, chartHeight)
-                + buildXAxisLabels(points.stream().map(TrendPoint::getLabel).collect(Collectors.toList()), left, top, chartWidth, chartHeight)
-                + "<path d=\"" + secondaryLine + "\" fill=\"none\" stroke=\"" + secondaryColor + "\" stroke-width=\"18\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\"0.16\"></path>"
-                + "<path d=\"" + primaryLine + "\" fill=\"none\" stroke=\"" + primaryColor + "\" stroke-width=\"22\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\"0.14\"></path>"
-                + "<path d=\"" + secondaryLine + "\" fill=\"none\" stroke=\"" + secondaryColor + "\" stroke-width=\"3.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path>"
-                + "<path d=\"" + primaryLine + "\" fill=\"none\" stroke=\"" + primaryColor + "\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path>"
+                + buildXAxisLabels(points.stream().map(TrendPoint::getLabel).collect(Collectors.toList()), left, top, chartWidth, chartHeight, 6)
+                + "<path d=\"" + secondaryLine + "\" fill=\"none\" stroke=\"" + secondaryColor + "\" stroke-width=\"8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\"0.10\"></path>"
+                + "<path d=\"" + primaryLine + "\" fill=\"none\" stroke=\"" + primaryColor + "\" stroke-width=\"8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\"0.10\"></path>"
+                + "<path d=\"" + secondaryLine + "\" fill=\"none\" stroke=\"" + secondaryColor + "\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path>"
+                + "<path d=\"" + primaryLine + "\" fill=\"none\" stroke=\"" + primaryColor + "\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path>"
                 + buildPointDots(primaryPoints, primaryColor, "#ffffff")
                 + buildPointDots(secondaryPoints, secondaryColor, "#ffffff")
+                + buildInteractiveHotspots(points, primaryPoints, secondaryPoints, left, top, chartWidth, chartHeight)
                 + "</svg>";
     }
 
@@ -275,10 +295,13 @@ public class AdminDashboardServlet extends HttpServlet {
         String line = buildPolyline(values, maxValue, left, top, chartWidth, chartHeight);
         String area = buildAreaPath(values, maxValue, left, top, chartWidth, chartHeight);
 
+        List<ChartPoint> chartPoints = buildChartPoints(values, maxValue, left, top, chartWidth, chartHeight);
+
         return "<svg viewBox=\"0 0 " + width + " " + height + "\" class=\"analytics-chart analytics-chart-compact\" role=\"img\" aria-label=\"Average wait trend chart\">"
                 + buildGridLines(width, height, left, right, top, bottom)
                 + "<path d=\"" + area + "\" fill=\"url(#analyticsWaitArea)\" opacity=\"0.22\"></path>"
                 + "<polyline points=\"" + line + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"3.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></polyline>"
+                + buildSingleTrendHotspots(points, chartPoints, left, top, chartWidth, chartHeight)
                 + "<defs><linearGradient id=\"analyticsWaitArea\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">"
                 + "<stop offset=\"0%\" stop-color=\"" + color + "\"/>"
                 + "<stop offset=\"100%\" stop-color=\"#0f172a\" stop-opacity=\"0\"/>"
@@ -324,6 +347,10 @@ public class AdminDashboardServlet extends HttpServlet {
     }
 
     private String buildXAxisLabels(List<String> labels, int left, int top, int chartWidth, int chartHeight) {
+        return buildXAxisLabels(labels, left, top, chartWidth, chartHeight, labels.size());
+    }
+
+    private String buildXAxisLabels(List<String> labels, int left, int top, int chartWidth, int chartHeight, int maxLabels) {
         StringBuilder result = new StringBuilder();
         int y = top + chartHeight + 24;
         if (labels.size() == 1) {
@@ -337,7 +364,12 @@ public class AdminDashboardServlet extends HttpServlet {
             return result.toString();
         }
 
+        int step = Math.max(1, (int) Math.ceil(labels.size() / (double) Math.max(1, maxLabels)));
         for (int i = 0; i < labels.size(); i++) {
+            boolean last = i == labels.size() - 1;
+            if (i % step != 0 && !last) {
+                continue;
+            }
             int x = left + (int) Math.round((chartWidth * i) / (double) (labels.size() - 1));
             result.append("<text x=\"")
                     .append(x)
@@ -398,20 +430,138 @@ public class AdminDashboardServlet extends HttpServlet {
                     .append(formatDouble(point.x))
                     .append("\" cy=\"")
                     .append(formatDouble(point.y))
-                    .append("\" r=\"5.5\" fill=\"")
+                    .append("\" r=\"4.5\" fill=\"")
                     .append(color)
-                    .append("\" opacity=\"0.18\"></circle>");
+                    .append("\" opacity=\"0.12\"></circle>");
             dots.append("<circle cx=\"")
                     .append(formatDouble(point.x))
                     .append("\" cy=\"")
                     .append(formatDouble(point.y))
-                    .append("\" r=\"3.7\" fill=\"")
+                    .append("\" r=\"2.8\" fill=\"")
                     .append(color)
                     .append("\" stroke=\"")
                     .append(centerFill)
-                    .append("\" stroke-width=\"1.5\"></circle>");
+                    .append("\" stroke-width=\"1.25\"></circle>");
         }
         return dots.toString();
+    }
+
+    private String buildInteractiveHotspots(List<TrendPoint> points, List<ChartPoint> primaryPoints,
+                                            List<ChartPoint> secondaryPoints, int left, int top,
+                                            int chartWidth, int chartHeight) {
+        if (points.isEmpty() || primaryPoints.size() != points.size() || secondaryPoints.size() != points.size()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder("<g class=\"analytics-chart-hotspots\">");
+        for (int i = 0; i < points.size(); i++) {
+            double x = primaryPoints.get(i).x;
+            double prevX = i == 0 ? left : primaryPoints.get(i - 1).x;
+            double nextX = i == points.size() - 1 ? left + chartWidth : primaryPoints.get(i + 1).x;
+            double zoneLeft = i == 0 ? left : (prevX + x) / 2.0;
+            double zoneRight = i == points.size() - 1 ? left + chartWidth : (x + nextX) / 2.0;
+            TrendPoint point = points.get(i);
+            int rate = point.getPrimaryValue() > 0
+                    ? (int) Math.round((point.getSecondaryValue() * 100.0) / point.getPrimaryValue())
+                    : 0;
+
+            result.append("<rect class=\"analytics-chart-hitbox\" tabindex=\"0\" x=\"")
+                    .append(formatDouble(zoneLeft))
+                    .append("\" y=\"")
+                    .append(top)
+                    .append("\" width=\"")
+                    .append(formatDouble(Math.max(1, zoneRight - zoneLeft)))
+                    .append("\" height=\"")
+                    .append(chartHeight)
+                    .append("\" data-label=\"")
+                    .append(escapeHtmlAttribute(point.getLabel()))
+                    .append("\" data-primary=\"")
+                    .append(point.getPrimaryValue())
+                    .append("\" data-secondary=\"")
+                    .append(point.getSecondaryValue())
+                    .append("\" data-rate=\"")
+                    .append(rate)
+                    .append("\"></rect>");
+
+            result.append("<line class=\"analytics-chart-focus-line\" x1=\"")
+                    .append(formatDouble(x))
+                    .append("\" y1=\"")
+                    .append(top)
+                    .append("\" x2=\"")
+                    .append(formatDouble(x))
+                    .append("\" y2=\"")
+                    .append(top + chartHeight)
+                    .append("\"></line>");
+
+            result.append("<circle class=\"analytics-chart-focus-dot analytics-chart-focus-dot-primary\" cx=\"")
+                    .append(formatDouble(primaryPoints.get(i).x))
+                    .append("\" cy=\"")
+                    .append(formatDouble(primaryPoints.get(i).y))
+                    .append("\" r=\"5.5\"></circle>");
+
+            result.append("<circle class=\"analytics-chart-focus-dot analytics-chart-focus-dot-secondary\" cx=\"")
+                    .append(formatDouble(secondaryPoints.get(i).x))
+                    .append("\" cy=\"")
+                    .append(formatDouble(secondaryPoints.get(i).y))
+                    .append("\" r=\"5\"></circle>");
+        }
+        result.append("</g>");
+        return result.toString();
+    }
+
+    private String buildSingleTrendHotspots(List<SingleTrendPoint> points, List<ChartPoint> chartPoints,
+                                            int left, int top, int chartWidth, int chartHeight) {
+        if (points.isEmpty() || chartPoints.size() != points.size()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder("<g class=\"analytics-chart-hotspots\">");
+        for (int i = 0; i < points.size(); i++) {
+            double x = chartPoints.get(i).x;
+            double prevX = i == 0 ? left : chartPoints.get(i - 1).x;
+            double nextX = i == points.size() - 1 ? left + chartWidth : chartPoints.get(i + 1).x;
+            double zoneLeft = i == 0 ? left : (prevX + x) / 2.0;
+            double zoneRight = i == points.size() - 1 ? left + chartWidth : (x + nextX) / 2.0;
+            SingleTrendPoint point = points.get(i);
+
+            result.append("<rect class=\"analytics-chart-hitbox analytics-chart-hitbox-wait\" tabindex=\"0\" x=\"")
+                    .append(formatDouble(zoneLeft))
+                    .append("\" y=\"")
+                    .append(top)
+                    .append("\" width=\"")
+                    .append(formatDouble(Math.max(1, zoneRight - zoneLeft)))
+                    .append("\" height=\"")
+                    .append(chartHeight)
+                    .append("\" data-label=\"")
+                    .append(escapeHtmlAttribute(point.getLabel()))
+                    .append("\" data-value=\"")
+                    .append(point.getValue())
+                    .append("\" data-visits=\"")
+                    .append(point.getVisitCount())
+                    .append("\" data-min=\"")
+                    .append(point.getMinValue())
+                    .append("\" data-max=\"")
+                    .append(point.getMaxValue())
+                    .append("\"></rect>");
+
+            result.append("<line class=\"analytics-chart-focus-line analytics-chart-focus-line-wait\" x1=\"")
+                    .append(formatDouble(x))
+                    .append("\" y1=\"")
+                    .append(top)
+                    .append("\" x2=\"")
+                    .append(formatDouble(x))
+                    .append("\" y2=\"")
+                    .append(top + chartHeight)
+                    .append("\"></line>");
+
+            result.append("<circle class=\"analytics-chart-focus-dot analytics-chart-focus-dot-wait\" cx=\"")
+                    .append(formatDouble(chartPoints.get(i).x))
+                    .append("\" cy=\"")
+                    .append(formatDouble(chartPoints.get(i).y))
+                    .append("\" r=\"5.25\"></circle>");
+        }
+        result.append("</g>");
+        return result.toString();
     }
 
     private String buildPolyline(int[] values, int maxValue, int left, int top, int chartWidth, int chartHeight) {
@@ -477,6 +627,17 @@ public class AdminDashboardServlet extends HttpServlet {
         return String.format(Locale.ENGLISH, "%.2f", value);
     }
 
+    private String escapeHtmlAttribute(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("&", "&amp;")
+                .replace("\"", "&quot;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+    }
+
     private static class ChartPoint {
         private final double x;
         private final double y;
@@ -506,14 +667,49 @@ public class AdminDashboardServlet extends HttpServlet {
     public static class SingleTrendPoint {
         private final String label;
         private final int value;
+        private final int visitCount;
+        private final int minValue;
+        private final int maxValue;
 
-        public SingleTrendPoint(String label, int value) {
+        public SingleTrendPoint(String label, int value, int visitCount, int minValue, int maxValue) {
             this.label = label;
             this.value = value;
+            this.visitCount = visitCount;
+            this.minValue = minValue;
+            this.maxValue = maxValue;
         }
 
         public String getLabel() { return label; }
         public int getValue() { return value; }
+        public int getVisitCount() { return visitCount; }
+        public int getMinValue() { return minValue; }
+        public int getMaxValue() { return maxValue; }
+    }
+
+    public static class TrendOverview {
+        private final int bookedTotal;
+        private final int completedTotal;
+        private final String peakBookedLabel;
+        private final int peakBookedValue;
+        private final String peakCompletedLabel;
+        private final int peakCompletedValue;
+
+        public TrendOverview(int bookedTotal, int completedTotal, String peakBookedLabel, int peakBookedValue,
+                             String peakCompletedLabel, int peakCompletedValue) {
+            this.bookedTotal = bookedTotal;
+            this.completedTotal = completedTotal;
+            this.peakBookedLabel = peakBookedLabel;
+            this.peakBookedValue = peakBookedValue;
+            this.peakCompletedLabel = peakCompletedLabel;
+            this.peakCompletedValue = peakCompletedValue;
+        }
+
+        public int getBookedTotal() { return bookedTotal; }
+        public int getCompletedTotal() { return completedTotal; }
+        public String getPeakBookedLabel() { return peakBookedLabel; }
+        public int getPeakBookedValue() { return peakBookedValue; }
+        public String getPeakCompletedLabel() { return peakCompletedLabel; }
+        public int getPeakCompletedValue() { return peakCompletedValue; }
     }
 
     public static class StatusMetric {

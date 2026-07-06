@@ -84,25 +84,51 @@
         <section class="analytics-panel analytics-panel-wide">
             <div class="analytics-panel-header">
                 <div>
-                    <div class="analytics-panel-title">7-day operations flow</div>
-                    <div class="analytics-panel-subtitle">Appointments scheduled versus visits completed</div>
+                    <div class="analytics-panel-title">30-day bookings vs completed visits</div>
+                    <div class="analytics-panel-subtitle">A longer trend view of scheduled demand and completed care</div>
                 </div>
                 <div class="analytics-legend">
-                    <span><i class="legend-dot purple"></i> Appointments</span>
+                    <span><i class="legend-dot purple"></i> Appointments booked</span>
                     <span><i class="legend-dot green"></i> Completed visits</span>
                 </div>
             </div>
             <div class="analytics-chart-wrap analytics-chart-wrap-large">
                 <c:out value="${operationsChartSvg}" escapeXml="false"/>
-            </div>
-            <div class="analytics-chart-summary">
-                <c:forEach var="point" items="${operationsTrend}">
-                    <div class="analytics-chart-stat">
-                        <span class="analytics-chart-day">${point.label}</span>
-                        <strong>${point.primaryValue}</strong>
-                        <span>${point.secondaryValue} done</span>
+                <div class="analytics-chart-tooltip hidden" id="operationsChartTooltip" role="status" aria-live="polite">
+                    <div class="analytics-chart-tooltip-date" id="operationsTooltipDate">-</div>
+                    <div class="analytics-chart-tooltip-row">
+                        <span class="analytics-chart-tooltip-key"><i class="legend-dot purple"></i>Appointments booked</span>
+                        <strong id="operationsTooltipPrimary">0</strong>
                     </div>
-                </c:forEach>
+                    <div class="analytics-chart-tooltip-row">
+                        <span class="analytics-chart-tooltip-key"><i class="legend-dot green"></i>Completed visits</span>
+                        <strong id="operationsTooltipSecondary">0</strong>
+                    </div>
+                    <div class="analytics-chart-tooltip-row analytics-chart-tooltip-row-muted">
+                        <span>Completion rate</span>
+                        <strong id="operationsTooltipRate">0%</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="analytics-trend-summary">
+                <div class="analytics-trend-card">
+                    <span class="analytics-trend-label">Booked in 30 days</span>
+                    <strong>${operationsOverview.bookedTotal}</strong>
+                </div>
+                <div class="analytics-trend-card">
+                    <span class="analytics-trend-label">Completed in 30 days</span>
+                    <strong>${operationsOverview.completedTotal}</strong>
+                </div>
+                <div class="analytics-trend-card">
+                    <span class="analytics-trend-label">Peak booking day</span>
+                    <strong>${operationsOverview.peakBookedValue}</strong>
+                    <span class="analytics-trend-meta">${operationsOverview.peakBookedLabel}</span>
+                </div>
+                <div class="analytics-trend-card">
+                    <span class="analytics-trend-label">Peak completion day</span>
+                    <strong>${operationsOverview.peakCompletedValue}</strong>
+                    <span class="analytics-trend-meta">${operationsOverview.peakCompletedLabel}</span>
+                </div>
             </div>
         </section>
 
@@ -140,6 +166,21 @@
             </div>
             <div class="analytics-chart-wrap compact">
                 <c:out value="${waitChartSvg}" escapeXml="false"/>
+                <div class="analytics-chart-tooltip hidden" id="waitChartTooltip" role="status" aria-live="polite">
+                    <div class="analytics-chart-tooltip-date" id="waitTooltipDate">-</div>
+                    <div class="analytics-chart-tooltip-row">
+                        <span class="analytics-chart-tooltip-key"><i class="legend-dot info"></i>Average wait</span>
+                        <strong id="waitTooltipAvg">0 min</strong>
+                    </div>
+                    <div class="analytics-chart-tooltip-row">
+                        <span class="analytics-chart-tooltip-key">Completed visits</span>
+                        <strong id="waitTooltipVisits">0</strong>
+                    </div>
+                    <div class="analytics-chart-tooltip-row analytics-chart-tooltip-row-muted">
+                        <span>Range</span>
+                        <strong id="waitTooltipRange">0 - 0 min</strong>
+                    </div>
+                </div>
             </div>
             <div class="analytics-mini-labels">
                 <c:forEach var="point" items="${waitTrend}">
@@ -294,5 +335,164 @@
 </div>
 
 <div class="page-footer">MediQueue | SWE3024 Code Camp | Sunway University</div>
+<script>
+(function () {
+    var chartWrap = document.querySelector('.analytics-chart-wrap-large');
+    var tooltip = document.getElementById('operationsChartTooltip');
+    if (!chartWrap || !tooltip) return;
+
+    var hitboxes = chartWrap.querySelectorAll('.analytics-chart-hitbox');
+    var focusLines = chartWrap.querySelectorAll('.analytics-chart-focus-line');
+    var focusDots = chartWrap.querySelectorAll('.analytics-chart-focus-dot');
+    var tooltipDate = document.getElementById('operationsTooltipDate');
+    var tooltipPrimary = document.getElementById('operationsTooltipPrimary');
+    var tooltipSecondary = document.getElementById('operationsTooltipSecondary');
+    var tooltipRate = document.getElementById('operationsTooltipRate');
+
+    function clearActive() {
+        focusLines.forEach(function (line) { line.classList.remove('active'); });
+        focusDots.forEach(function (dot) { dot.classList.remove('active'); });
+    }
+
+    function positionTooltip(clientX, clientY) {
+        var wrapRect = chartWrap.getBoundingClientRect();
+        var tooltipRect = tooltip.getBoundingClientRect();
+        var left = clientX - wrapRect.left + 18;
+        var top = clientY - wrapRect.top - tooltipRect.height - 14;
+
+        if (left + tooltipRect.width > wrapRect.width - 12) {
+            left = wrapRect.width - tooltipRect.width - 12;
+        }
+        if (left < 12) {
+            left = 12;
+        }
+        if (top < 12) {
+            top = clientY - wrapRect.top + 16;
+        }
+
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+    }
+
+    function showTooltip(hitbox, event) {
+        var index = Array.prototype.indexOf.call(hitboxes, hitbox);
+        clearActive();
+
+        if (focusLines[index]) {
+            focusLines[index].classList.add('active');
+        }
+        var primaryDot = focusDots[index * 2];
+        var secondaryDot = focusDots[index * 2 + 1];
+        if (primaryDot) primaryDot.classList.add('active');
+        if (secondaryDot) secondaryDot.classList.add('active');
+
+        tooltipDate.textContent = hitbox.getAttribute('data-label') || '-';
+        tooltipPrimary.textContent = hitbox.getAttribute('data-primary') || '0';
+        tooltipSecondary.textContent = hitbox.getAttribute('data-secondary') || '0';
+        tooltipRate.textContent = (hitbox.getAttribute('data-rate') || '0') + '%';
+        tooltip.classList.remove('hidden');
+
+        if (event) {
+            positionTooltip(event.clientX, event.clientY);
+        }
+    }
+
+    hitboxes.forEach(function (hitbox) {
+        hitbox.addEventListener('mouseenter', function (event) {
+            showTooltip(hitbox, event);
+        });
+        hitbox.addEventListener('mousemove', function (event) {
+            showTooltip(hitbox, event);
+        });
+        hitbox.addEventListener('focus', function () {
+            var rect = hitbox.getBoundingClientRect();
+            showTooltip(hitbox, { clientX: rect.left + rect.width / 2, clientY: rect.top + 24 });
+        });
+        hitbox.addEventListener('mouseleave', function () {
+            tooltip.classList.add('hidden');
+            clearActive();
+        });
+        hitbox.addEventListener('blur', function () {
+            tooltip.classList.add('hidden');
+            clearActive();
+        });
+    });
+
+    var waitWrap = document.querySelector('.analytics-chart-wrap.compact');
+    var waitTooltip = document.getElementById('waitChartTooltip');
+    if (!waitWrap || !waitTooltip) return;
+
+    var waitHitboxes = waitWrap.querySelectorAll('.analytics-chart-hitbox-wait');
+    var waitFocusLines = waitWrap.querySelectorAll('.analytics-chart-focus-line-wait');
+    var waitFocusDots = waitWrap.querySelectorAll('.analytics-chart-focus-dot-wait');
+    var waitTooltipDate = document.getElementById('waitTooltipDate');
+    var waitTooltipAvg = document.getElementById('waitTooltipAvg');
+    var waitTooltipVisits = document.getElementById('waitTooltipVisits');
+    var waitTooltipRange = document.getElementById('waitTooltipRange');
+
+    function clearWaitActive() {
+        waitFocusLines.forEach(function (line) { line.classList.remove('active'); });
+        waitFocusDots.forEach(function (dot) { dot.classList.remove('active'); });
+    }
+
+    function positionWaitTooltip(clientX, clientY) {
+        var wrapRect = waitWrap.getBoundingClientRect();
+        var tooltipRect = waitTooltip.getBoundingClientRect();
+        var left = clientX - wrapRect.left + 16;
+        var top = clientY - wrapRect.top - tooltipRect.height - 12;
+
+        if (left + tooltipRect.width > wrapRect.width - 12) {
+            left = wrapRect.width - tooltipRect.width - 12;
+        }
+        if (left < 12) {
+            left = 12;
+        }
+        if (top < 12) {
+            top = clientY - wrapRect.top + 16;
+        }
+
+        waitTooltip.style.left = left + 'px';
+        waitTooltip.style.top = top + 'px';
+    }
+
+    function showWaitTooltip(hitbox, event) {
+        var index = Array.prototype.indexOf.call(waitHitboxes, hitbox);
+        clearWaitActive();
+        if (waitFocusLines[index]) waitFocusLines[index].classList.add('active');
+        if (waitFocusDots[index]) waitFocusDots[index].classList.add('active');
+
+        waitTooltipDate.textContent = hitbox.getAttribute('data-label') || '-';
+        waitTooltipAvg.textContent = (hitbox.getAttribute('data-value') || '0') + ' min';
+        waitTooltipVisits.textContent = hitbox.getAttribute('data-visits') || '0';
+        waitTooltipRange.textContent = (hitbox.getAttribute('data-min') || '0') + ' - ' + (hitbox.getAttribute('data-max') || '0') + ' min';
+        waitTooltip.classList.remove('hidden');
+
+        if (event) {
+            positionWaitTooltip(event.clientX, event.clientY);
+        }
+    }
+
+    waitHitboxes.forEach(function (hitbox) {
+        hitbox.addEventListener('mouseenter', function (event) {
+            showWaitTooltip(hitbox, event);
+        });
+        hitbox.addEventListener('mousemove', function (event) {
+            showWaitTooltip(hitbox, event);
+        });
+        hitbox.addEventListener('focus', function () {
+            var rect = hitbox.getBoundingClientRect();
+            showWaitTooltip(hitbox, { clientX: rect.left + rect.width / 2, clientY: rect.top + 20 });
+        });
+        hitbox.addEventListener('mouseleave', function () {
+            waitTooltip.classList.add('hidden');
+            clearWaitActive();
+        });
+        hitbox.addEventListener('blur', function () {
+            waitTooltip.classList.add('hidden');
+            clearWaitActive();
+        });
+    });
+})();
+</script>
 </body>
 </html>

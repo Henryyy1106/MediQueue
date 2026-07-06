@@ -7,7 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Profile - MediQueue</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/mediqueue.css?v=3">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/mediqueue.css?v=5">
 </head>
 <body>
 <jsp:include page="/WEB-INF/views/common/patient_nav.jsp"/>
@@ -75,16 +75,25 @@
                 <input type="hidden" name="action" value="changePassword">
                 <div class="form-group">
                     <label class="form-label">Current Password</label>
-                    <input type="password" name="currentPassword" class="form-control" required>
+                    <div class="auth-password-field">
+                        <input type="password" name="currentPassword" class="form-control" required data-password-input>
+                        <button type="button" class="auth-password-toggle" data-password-toggle aria-label="Show password"><i class="fi fi-ss-eye-crossed"></i></button>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">New Password</label>
-                        <input type="password" name="newPassword" class="form-control" required>
+                        <div class="auth-password-field">
+                            <input type="password" name="newPassword" class="form-control" required data-password-input>
+                            <button type="button" class="auth-password-toggle" data-password-toggle aria-label="Show password"><i class="fi fi-ss-eye-crossed"></i></button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Confirm New Password</label>
-                        <input type="password" name="confirmPassword" class="form-control" required>
+                        <div class="auth-password-field">
+                            <input type="password" name="confirmPassword" class="form-control" required data-password-input>
+                            <button type="button" class="auth-password-toggle" data-password-toggle aria-label="Show password"><i class="fi fi-ss-eye-crossed"></i></button>
+                        </div>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-warning">Update Password</button>
@@ -94,5 +103,21 @@
 </div>
 
 <div class="page-footer">MediQueue | SWE3024 Code Camp | Sunway University</div>
+<script>
+(function () {
+    var toggles = document.querySelectorAll('[data-password-toggle]');
+    toggles.forEach(function (toggle) {
+        toggle.addEventListener('click', function () {
+            var wrapper = toggle.closest('.auth-password-field');
+            var input = wrapper ? wrapper.querySelector('[data-password-input]') : null;
+            if (!input) return;
+            var isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+            toggle.innerHTML = isHidden ? '<i class="fi fi-ss-eye"></i>' : '<i class="fi fi-ss-eye-crossed"></i>';
+            toggle.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+        });
+    });
+})();
+</script>
 </body>
 </html>

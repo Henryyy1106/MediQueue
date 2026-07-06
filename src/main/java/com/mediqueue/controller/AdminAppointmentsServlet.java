@@ -92,7 +92,7 @@ public class AdminAppointmentsServlet extends HttpServlet {
             appointmentDAO.updateAppointmentForAdmin(updated);
             syncQueueAndVisitHistory(existing, updated, slotChanged);
 
-            resp.sendRedirect(contextPath + "/admin/appointments/view/" + apptId + "?updated=1");
+            resp.sendRedirect(contextPath + "/admin/appointments?updated=1");
         } catch (IllegalArgumentException e) {
             resp.sendRedirect(contextPath + "/admin/appointments?error=" + e.getMessage().replace(" ", "_"));
         } catch (Exception e) {
