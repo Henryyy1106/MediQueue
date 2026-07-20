@@ -47,10 +47,10 @@ public class AppSettingDAO {
     }
 
     public String getSettingValue(String key, String defaultValue) {
-        SchemaBootstrap.ensureRuntimeSchema();
         String sql = "SELECT setting_value FROM app_settings WHERE setting_key = ?";
         Connection conn = null;
         try {
+            SchemaBootstrap.ensureRuntimeSchema();
             conn = DatabaseConnection.getConnection();
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, key);
@@ -61,7 +61,9 @@ public class AppSettingDAO {
                     }
                 }
             }
-        } catch (SQLException e) {
+        } catch (Exception e) {
+            // DB unavailable (missing datasource, connection-pool init failure, etc.) —
+            // honour the method's contract and fall back to the caller's default.
             return defaultValue;
         } finally {
             DatabaseConnection.closeConnection(conn);
