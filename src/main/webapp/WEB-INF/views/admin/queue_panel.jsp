@@ -7,7 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Queue Panel - MediQueue</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/mediqueue.css?v=4">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/mediqueue.css?v=12">
 </head>
 <body>
 <jsp:include page="/WEB-INF/views/common/admin_nav.jsp"/>
@@ -41,32 +41,59 @@
         </div>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-header">
-            <h5><i class="fi fi-ss-search"></i> Refine Queue View</h5>
-            <a href="${pageContext.request.contextPath}/admin/queue?date=<%= new java.sql.Date(System.currentTimeMillis()) %>" class="btn btn-outline btn-sm">Reset to Today</a>
-        </div>
+    <section class="card users-filter-card mb-3">
         <div class="card-body">
-            <form method="get" action="${pageContext.request.contextPath}/admin/queue">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Clinic</label>
-                        <select name="clinicId" class="form-control">
-                            <option value="">-- All Clinics --</option>
-                            <c:forEach var="clinic" items="${clinics}">
-                                <option value="${clinic.clinicId}" ${clinic.clinicId == selectedClinicId ? 'selected' : ''}>${fn:escapeXml(clinic.name)}</option>
-                            </c:forEach>
-                        </select>
+            <div class="users-filter-form">
+                <div class="users-filter-grid users-filter-grid-compact">
+                    <div class="queue-filter-summary">
+                        <div class="queue-filter-summary-icon"><i class="fi fi-ss-search"></i></div>
+                        <div>
+                            <div class="queue-filter-summary-title">Queue view</div>
+                            <div class="queue-filter-summary-copy">${fn:escapeXml(scopeTitle)} | ${selectedDate}</div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Date</label>
-                        <input type="date" name="date" class="form-control" value="${selectedDate}">
+                    <div class="users-filter-actions">
+                        <div class="users-filter-popover-wrap">
+                            <button type="button" class="btn btn-outline" id="openQueueFilters">
+                                <i class="fi fi-ss-settings-sliders"></i> Filter
+                            </button>
+                            <form method="get" action="${pageContext.request.contextPath}/admin/queue"
+                                  class="users-filter-popover" id="queueFilterPopover" aria-hidden="true">
+                                <div class="users-filter-popover-header">
+                                    <strong>Filters</strong>
+                                    <button type="button" class="users-filter-close" id="closeQueueFilters" aria-label="Close queue filters">
+                                        <i class="fi fi-ss-cross-small"></i>
+                                    </button>
+                                </div>
+                                <div class="users-filter-popover-body">
+                                    <div class="users-filter-group">
+                                        <span class="users-filter-label">Clinic</span>
+                                        <select name="clinicId" class="form-control">
+                                            <option value="">All clinics</option>
+                                            <c:forEach var="clinic" items="${clinics}">
+                                                <option value="${clinic.clinicId}" ${clinic.clinicId == selectedClinicId ? 'selected' : ''}>${fn:escapeXml(clinic.name)}</option>
+                                            </c:forEach>
+                                        </select>
+                                    </div>
+                                    <div class="users-filter-group">
+                                        <span class="users-filter-label">Date</span>
+                                        <input type="date" name="date" class="form-control" value="${selectedDate}">
+                                    </div>
+                                </div>
+                                <div class="users-filter-popover-footer">
+                                    <a href="${pageContext.request.contextPath}/admin/queue?date=<%= new java.sql.Date(System.currentTimeMillis()) %>" class="btn btn-outline btn-sm">Clear</a>
+                                    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                                </div>
+                            </form>
+                        </div>
+                        <a href="${pageContext.request.contextPath}/admin/queue?date=<%= new java.sql.Date(System.currentTimeMillis()) %>" class="btn btn-outline">
+                            Reset to Today
+                        </a>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary"><i class="fi fi-ss-search"></i> Apply Filter</button>
-            </form>
+            </div>
         </div>
-    </div>
+    </section>
 
     <c:if test="${not empty error}">
         <div class="alert alert-danger"><i class="fi fi-ss-triangle-warning"></i> ${fn:escapeXml(error)}</div>
@@ -152,5 +179,44 @@
 </div>
 
 <div class="page-footer">MediQueue | SWE3024 Code Camp | Sunway University</div>
+<script>
+(function () {
+    var filterBtn = document.getElementById('openQueueFilters');
+    var closeFilterBtn = document.getElementById('closeQueueFilters');
+    var filterPopover = document.getElementById('queueFilterPopover');
+
+    function setFilterPopover(open) {
+        if (!filterPopover) return;
+        filterPopover.classList.toggle('open', open);
+        filterPopover.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+
+    if (filterBtn) {
+        filterBtn.addEventListener('click', function () {
+            var isOpen = filterPopover && filterPopover.classList.contains('open');
+            setFilterPopover(!isOpen);
+        });
+    }
+
+    if (closeFilterBtn) {
+        closeFilterBtn.addEventListener('click', function () {
+            setFilterPopover(false);
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        if (!filterPopover || !filterBtn) return;
+        if (!filterPopover.contains(event.target) && !filterBtn.contains(event.target)) {
+            setFilterPopover(false);
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            setFilterPopover(false);
+        }
+    });
+})();
+</script>
 </body>
 </html>

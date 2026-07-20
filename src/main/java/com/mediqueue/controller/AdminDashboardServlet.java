@@ -71,13 +71,12 @@ public class AdminDashboardServlet extends HttpServlet {
                     .orElse(0));
             int completionRate = totalToday > 0 ? (int) Math.round((doneCount * 100.0) / totalToday) : 0;
 
-            List<TrendPoint> operationsTrend = buildOperationsTrend(allAppts, allVisits, today);
-            List<SingleTrendPoint> waitTrend = buildWaitTrend(allVisits, today);
             List<StatusMetric> statusMetrics = buildStatusMetrics(todayQueue);
             List<ClinicLoadMetric> clinicMetrics = buildClinicLoadMetrics(clinics, todayQueue);
+            List<SingleTrendPoint> dailyVolumeTrend = buildDailyVolumeTrend(allVisits, today);
+            List<ClinicWaitPoint> clinicWaitTrend = buildClinicWaitTrend(clinicMetrics);
             List<VisitHistory> recentVisits = allVisits.stream().limit(4).collect(Collectors.toList());
             List<Queue> priorityQueue = todayQueue.stream().limit(5).collect(Collectors.toList());
-            TrendOverview operationsOverview = buildOperationsOverview(operationsTrend);
 
             req.setAttribute("todayQueue", todayQueue);
             req.setAttribute("priorityQueue", priorityQueue);
@@ -87,17 +86,17 @@ public class AdminDashboardServlet extends HttpServlet {
             req.setAttribute("inProgressCount", inProgressCount);
             req.setAttribute("doneCount", doneCount);
             req.setAttribute("totalToday", totalToday);
+            req.setAttribute("todayIso", today.toString());
             req.setAttribute("todayLabel", today.format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)));
             req.setAttribute("activeQueueCount", activeQueueCount);
             req.setAttribute("avgLiveWait", avgLiveWait);
             req.setAttribute("avgCompletedWait", avgCompletedWait);
             req.setAttribute("completionRate", completionRate);
             req.setAttribute("urgentCount", urgentCount);
-            req.setAttribute("operationsTrend", operationsTrend);
-            req.setAttribute("operationsChartSvg", buildDualLineChartSvg(operationsTrend, "#8b5cf6", "#22c55e"));
-            req.setAttribute("operationsOverview", operationsOverview);
-            req.setAttribute("waitTrend", waitTrend);
-            req.setAttribute("waitChartSvg", buildSingleLineChartSvg(waitTrend, "#38bdf8"));
+            req.setAttribute("dailyVolumeTrend", dailyVolumeTrend);
+            req.setAttribute("dailyVolumeChartSvg", buildDailyVolumeChartSvg(dailyVolumeTrend, "#10b981"));
+            req.setAttribute("clinicWaitTrend", clinicWaitTrend);
+            req.setAttribute("clinicWaitChartSvg", buildClinicWaitBarChartSvg(clinicWaitTrend, "#2946b6"));
             req.setAttribute("statusMetrics", statusMetrics);
             req.setAttribute("clinicMetrics", clinicMetrics);
 
@@ -152,22 +151,7 @@ public class AdminDashboardServlet extends HttpServlet {
         return points;
     }
 
-    private TrendOverview buildOperationsOverview(List<TrendPoint> points) {
-        int bookedTotal = points.stream().mapToInt(TrendPoint::getPrimaryValue).sum();
-        int completedTotal = points.stream().mapToInt(TrendPoint::getSecondaryValue).sum();
-        TrendPoint peakBooked = points.stream().max(Comparator.comparingInt(TrendPoint::getPrimaryValue)).orElse(new TrendPoint("-", 0, 0));
-        TrendPoint peakCompleted = points.stream().max(Comparator.comparingInt(TrendPoint::getSecondaryValue)).orElse(new TrendPoint("-", 0, 0));
-        return new TrendOverview(
-                bookedTotal,
-                completedTotal,
-                peakBooked.getLabel(),
-                peakBooked.getPrimaryValue(),
-                peakCompleted.getLabel(),
-                peakCompleted.getSecondaryValue()
-        );
-    }
-
-    private List<SingleTrendPoint> buildWaitTrend(List<VisitHistory> visits, LocalDate today) {
+    private List<SingleTrendPoint> buildDailyVolumeTrend(List<VisitHistory> visits, LocalDate today) {
         Map<LocalDate, List<Integer>> waitBuckets = new LinkedHashMap<>();
         for (int i = 6; i >= 0; i--) {
             waitBuckets.put(today.minusDays(i), new ArrayList<>());
@@ -188,14 +172,27 @@ public class AdminDashboardServlet extends HttpServlet {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH);
         for (Map.Entry<LocalDate, List<Integer>> entry : waitBuckets.entrySet()) {
             List<Integer> waits = entry.getValue();
-            int avg = waits.isEmpty()
-                    ? 0
-                    : (int) Math.round(waits.stream().mapToInt(Integer::intValue).average().orElse(0));
+            int volume = waits.size();
+            int avg = waits.isEmpty() ? 0 : (int) Math.round(waits.stream().mapToInt(Integer::intValue).average().orElse(0));
             int min = waits.isEmpty() ? 0 : waits.stream().mapToInt(Integer::intValue).min().orElse(0);
             int max = waits.isEmpty() ? 0 : waits.stream().mapToInt(Integer::intValue).max().orElse(0);
-            points.add(new SingleTrendPoint(formatter.format(entry.getKey()), avg, waits.size(), min, max));
+            points.add(new SingleTrendPoint(formatter.format(entry.getKey()), volume, volume, min, max, avg));
         }
         return points;
+    }
+
+    private List<ClinicWaitPoint> buildClinicWaitTrend(List<ClinicLoadMetric> clinicMetrics) {
+        return clinicMetrics.stream()
+                .sorted(Comparator.comparingInt(ClinicLoadMetric::getEstimatedWaitMins).reversed()
+                        .thenComparing(ClinicLoadMetric::getClinicName))
+                .limit(5)
+                .sorted(Comparator.comparing(ClinicLoadMetric::getClinicName))
+                .map(metric -> new ClinicWaitPoint(
+                        formatClinicShortName(metric.getClinicName()),
+                        metric.getClinicName(),
+                        metric.getEstimatedWaitMins()
+                ))
+                .collect(Collectors.toList());
     }
 
     private List<StatusMetric> buildStatusMetrics(List<Queue> todayQueue) {
@@ -234,6 +231,17 @@ public class AdminDashboardServlet extends HttpServlet {
                 .sorted(Comparator.comparingInt(ClinicLoadMetric::getLoadPercent).reversed()
                         .thenComparingInt(ClinicLoadMetric::getWaitingCount).reversed())
                 .collect(Collectors.toList());
+    }
+
+    private String formatClinicShortName(String clinicName) {
+        if (clinicName == null || clinicName.isBlank()) {
+            return "Clinic";
+        }
+        String trimmed = clinicName.trim();
+        if (trimmed.startsWith("Klinik Kesihatan ")) {
+            return "KK " + trimmed.substring("Klinik Kesihatan ".length()).trim();
+        }
+        return trimmed;
     }
 
     private String buildDualLineChartSvg(List<TrendPoint> points, String primaryColor, String secondaryColor) {
@@ -306,6 +314,91 @@ public class AdminDashboardServlet extends HttpServlet {
                 + "<stop offset=\"0%\" stop-color=\"" + color + "\"/>"
                 + "<stop offset=\"100%\" stop-color=\"#0f172a\" stop-opacity=\"0\"/>"
                 + "</linearGradient></defs></svg>";
+    }
+
+    private String buildDailyVolumeChartSvg(List<SingleTrendPoint> points, String color) {
+        if (points.isEmpty()) {
+            return "";
+        }
+
+        int width = 720;
+        int height = 320;
+        int left = 42;
+        int right = 20;
+        int top = 18;
+        int bottom = 42;
+        int chartWidth = width - left - right;
+        int chartHeight = height - top - bottom;
+        int rawMax = Math.max(1, points.stream().mapToInt(SingleTrendPoint::getValue).max().orElse(1));
+        int maxValue = niceAxisMax(rawMax + 2);
+        int[] values = points.stream().mapToInt(SingleTrendPoint::getValue).toArray();
+        List<ChartPoint> chartPoints = buildChartPoints(values, maxValue, left, top, chartWidth, chartHeight);
+        String line = buildSmoothPath(chartPoints);
+
+        return "<svg viewBox=\"0 0 " + width + " " + height + "\" class=\"analytics-chart\" role=\"img\" aria-label=\"Daily outpatient volume chart\">"
+                + buildGridLines(width, height, left, right, top, bottom)
+                + buildYAxisLabels(maxValue, left, top, chartHeight)
+                + buildXAxisLabels(points.stream().map(SingleTrendPoint::getLabel).collect(Collectors.toList()), left, top, chartWidth, chartHeight, 4)
+                + "<path d=\"" + line + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path>"
+                + buildFilledPointDots(chartPoints, color, "#ffffff", 5.2, 2.7)
+                + buildVolumeHotspots(points, chartPoints, left, top, chartWidth, chartHeight)
+                + "</svg>";
+    }
+
+    private String buildClinicWaitBarChartSvg(List<ClinicWaitPoint> points, String color) {
+        if (points.isEmpty()) {
+            return "";
+        }
+
+        int width = 720;
+        int height = 360;
+        int left = 42;
+        int right = 20;
+        int top = 18;
+        int bottom = 68;
+        int chartWidth = width - left - right;
+        int chartHeight = height - top - bottom;
+        int rawMax = Math.max(10, points.stream().mapToInt(ClinicWaitPoint::getValue).max().orElse(10));
+        int maxValue = niceAxisMax(rawMax + 4);
+        int barSlot = Math.max(1, chartWidth / points.size());
+        int barWidth = Math.min(56, Math.max(32, (int) Math.round(barSlot * 0.38)));
+        StringBuilder svg = new StringBuilder("<svg viewBox=\"0 0 ")
+                .append(width).append(' ').append(height)
+                .append("\" class=\"analytics-chart\" role=\"img\" aria-label=\"Average wait times by clinic chart\">")
+                .append(buildGridLines(width, height, left, right, top, bottom))
+                .append(buildYAxisLabels(maxValue, left, top, chartHeight));
+
+        for (int i = 0; i < points.size(); i++) {
+            ClinicWaitPoint point = points.get(i);
+            double centerX = left + ((i + 0.5) * chartWidth / points.size());
+            double barHeight = scaleValue(point.getValue(), maxValue, chartHeight);
+            double y = top + chartHeight - barHeight;
+            double x = centerX - (barWidth / 2.0);
+
+            svg.append("<rect class=\"analytics-bar analytics-chart-bar\" x=\"")
+                    .append(formatDouble(x))
+                    .append("\" y=\"")
+                    .append(formatDouble(y))
+                    .append("\" width=\"")
+                    .append(barWidth)
+                    .append("\" height=\"")
+                    .append(formatDouble(barHeight))
+                    .append("\" rx=\"10\" fill=\"")
+                    .append(color)
+                    .append("\"></rect>");
+
+            svg.append("<text x=\"")
+                    .append(formatDouble(centerX))
+                    .append("\" y=\"")
+                    .append(top + chartHeight + 28)
+                    .append("\" text-anchor=\"middle\" class=\"analytics-axis-label analytics-axis-label-clinic\">")
+                    .append(escapeHtmlAttribute(point.getShortLabel()))
+                    .append("</text>");
+        }
+
+        svg.append(buildWaitBarHotspots(points, left, top, chartWidth, chartHeight))
+                .append("</svg>");
+        return svg.toString();
     }
 
     private String buildGridLines(int width, int height, int left, int right, int top, int bottom) {
@@ -424,20 +517,29 @@ public class AdminDashboardServlet extends HttpServlet {
     }
 
     private String buildPointDots(List<ChartPoint> points, String color, String centerFill) {
+        return buildFilledPointDots(points, color, centerFill, 4.5, 2.8);
+    }
+
+    private String buildFilledPointDots(List<ChartPoint> points, String color, String centerFill,
+                                        double outerRadius, double innerRadius) {
         StringBuilder dots = new StringBuilder();
         for (ChartPoint point : points) {
             dots.append("<circle cx=\"")
                     .append(formatDouble(point.x))
                     .append("\" cy=\"")
                     .append(formatDouble(point.y))
-                    .append("\" r=\"4.5\" fill=\"")
+                    .append("\" r=\"")
+                    .append(formatDouble(outerRadius))
+                    .append("\" fill=\"")
                     .append(color)
-                    .append("\" opacity=\"0.12\"></circle>");
+                    .append("\" opacity=\"0.16\"></circle>");
             dots.append("<circle cx=\"")
                     .append(formatDouble(point.x))
                     .append("\" cy=\"")
                     .append(formatDouble(point.y))
-                    .append("\" r=\"2.8\" fill=\"")
+                    .append("\" r=\"")
+                    .append(formatDouble(innerRadius))
+                    .append("\" fill=\"")
                     .append(color)
                     .append("\" stroke=\"")
                     .append(centerFill)
@@ -509,6 +611,55 @@ public class AdminDashboardServlet extends HttpServlet {
         return result.toString();
     }
 
+    private String buildVolumeHotspots(List<SingleTrendPoint> points, List<ChartPoint> chartPoints,
+                                       int left, int top, int chartWidth, int chartHeight) {
+        if (points.isEmpty() || chartPoints.size() != points.size()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder("<g class=\"analytics-chart-hotspots\">");
+        for (int i = 0; i < points.size(); i++) {
+            double x = chartPoints.get(i).x;
+            double prevX = i == 0 ? left : chartPoints.get(i - 1).x;
+            double nextX = i == points.size() - 1 ? left + chartWidth : chartPoints.get(i + 1).x;
+            double zoneLeft = i == 0 ? left : (prevX + x) / 2.0;
+            double zoneRight = i == points.size() - 1 ? left + chartWidth : (x + nextX) / 2.0;
+            SingleTrendPoint point = points.get(i);
+
+            result.append("<rect class=\"analytics-chart-hitbox analytics-chart-hitbox-volume\" tabindex=\"0\" x=\"")
+                    .append(formatDouble(zoneLeft))
+                    .append("\" y=\"")
+                    .append(top)
+                    .append("\" width=\"")
+                    .append(formatDouble(Math.max(1, zoneRight - zoneLeft)))
+                    .append("\" height=\"")
+                    .append(chartHeight)
+                    .append("\" data-label=\"")
+                    .append(escapeHtmlAttribute(point.getLabel()))
+                    .append("\" data-value=\"")
+                    .append(point.getValue())
+                    .append("\"></rect>");
+
+            result.append("<line class=\"analytics-chart-focus-line analytics-chart-focus-line-volume\" x1=\"")
+                    .append(formatDouble(x))
+                    .append("\" y1=\"")
+                    .append(top)
+                    .append("\" x2=\"")
+                    .append(formatDouble(x))
+                    .append("\" y2=\"")
+                    .append(top + chartHeight)
+                    .append("\"></line>");
+
+            result.append("<circle class=\"analytics-chart-focus-dot analytics-chart-focus-dot-volume\" cx=\"")
+                    .append(formatDouble(chartPoints.get(i).x))
+                    .append("\" cy=\"")
+                    .append(formatDouble(chartPoints.get(i).y))
+                    .append("\" r=\"6\"></circle>");
+        }
+        result.append("</g>");
+        return result.toString();
+    }
+
     private String buildSingleTrendHotspots(List<SingleTrendPoint> points, List<ChartPoint> chartPoints,
                                             int left, int top, int chartWidth, int chartHeight) {
         if (points.isEmpty() || chartPoints.size() != points.size()) {
@@ -559,6 +710,47 @@ public class AdminDashboardServlet extends HttpServlet {
                     .append("\" cy=\"")
                     .append(formatDouble(chartPoints.get(i).y))
                     .append("\" r=\"5.25\"></circle>");
+        }
+        result.append("</g>");
+        return result.toString();
+    }
+
+    private String buildWaitBarHotspots(List<ClinicWaitPoint> points, int left, int top,
+                                        int chartWidth, int chartHeight) {
+        StringBuilder result = new StringBuilder("<g class=\"analytics-chart-hotspots\">");
+        for (int i = 0; i < points.size(); i++) {
+            double zoneLeft = left + (i * chartWidth / (double) points.size());
+            double zoneRight = left + ((i + 1) * chartWidth / (double) points.size());
+            double centerX = (zoneLeft + zoneRight) / 2.0;
+            ClinicWaitPoint point = points.get(i);
+
+            result.append("<rect class=\"analytics-chart-hitbox analytics-chart-hitbox-bar\" tabindex=\"0\" x=\"")
+                    .append(formatDouble(zoneLeft))
+                    .append("\" y=\"")
+                    .append(top)
+                    .append("\" width=\"")
+                    .append(formatDouble(Math.max(1, zoneRight - zoneLeft)))
+                    .append("\" height=\"")
+                    .append(chartHeight)
+                    .append("\" data-label=\"")
+                    .append(escapeHtmlAttribute(point.getShortLabel()))
+                    .append("\" data-full-label=\"")
+                    .append(escapeHtmlAttribute(point.getLabel()))
+                    .append("\" data-value=\"")
+                    .append(point.getValue())
+                    .append("\" data-index=\"")
+                    .append(i)
+                    .append("\"></rect>");
+
+            result.append("<line class=\"analytics-chart-focus-line analytics-chart-focus-line-bar\" x1=\"")
+                    .append(formatDouble(centerX))
+                    .append("\" y1=\"")
+                    .append(top)
+                    .append("\" x2=\"")
+                    .append(formatDouble(centerX))
+                    .append("\" y2=\"")
+                    .append(top + chartHeight)
+                    .append("\"></line>");
         }
         result.append("</g>");
         return result.toString();
@@ -670,13 +862,15 @@ public class AdminDashboardServlet extends HttpServlet {
         private final int visitCount;
         private final int minValue;
         private final int maxValue;
+        private final int averageWait;
 
-        public SingleTrendPoint(String label, int value, int visitCount, int minValue, int maxValue) {
+        public SingleTrendPoint(String label, int value, int visitCount, int minValue, int maxValue, int averageWait) {
             this.label = label;
             this.value = value;
             this.visitCount = visitCount;
             this.minValue = minValue;
             this.maxValue = maxValue;
+            this.averageWait = averageWait;
         }
 
         public String getLabel() { return label; }
@@ -684,6 +878,23 @@ public class AdminDashboardServlet extends HttpServlet {
         public int getVisitCount() { return visitCount; }
         public int getMinValue() { return minValue; }
         public int getMaxValue() { return maxValue; }
+        public int getAverageWait() { return averageWait; }
+    }
+
+    public static class ClinicWaitPoint {
+        private final String shortLabel;
+        private final String label;
+        private final int value;
+
+        public ClinicWaitPoint(String shortLabel, String label, int value) {
+            this.shortLabel = shortLabel;
+            this.label = label;
+            this.value = value;
+        }
+
+        public String getShortLabel() { return shortLabel; }
+        public String getLabel() { return label; }
+        public int getValue() { return value; }
     }
 
     public static class TrendOverview {

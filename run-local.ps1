@@ -49,7 +49,7 @@ function Invoke-DemoSeed {
     }
 
     Write-Host "==> Seeding demo data into MySQL..." -ForegroundColor Yellow
-    Get-Content -Raw $seedDemoPath | docker compose exec -T db mysql -uroot -proot mediqueue | Out-Host
+    Get-Content -Raw $seedDemoPath | docker compose exec -T db mysql -h 127.0.0.1 -uroot -proot mediqueue | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Demo seed failed."
     }
@@ -57,10 +57,28 @@ function Invoke-DemoSeed {
     Write-Host "Demo data seed complete." -ForegroundColor Green
 }
 
+function Wait-ForDatabase {
+    $maxAttempts = 30
+
+    Write-Host "==> Waiting for MySQL to become ready..." -ForegroundColor Yellow
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        docker compose exec -T db mysqladmin ping -h 127.0.0.1 -uroot -proot --silent | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "MySQL is ready." -ForegroundColor Green
+            return
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "MySQL did not become ready in time."
+}
+
 Push-Location $projectRoot
 try {
     Write-Host "==> Ensuring Docker MySQL is running..." -ForegroundColor Yellow
     docker compose up -d db | Out-Host
+    Wait-ForDatabase
 
     Write-Host "==> Setting MediQueue database environment for this shell..." -ForegroundColor Yellow
     $env:MEDIQUEUE_DB_URL = $dbUrl

@@ -7,7 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Management - MediQueue</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/mediqueue.css?v=7">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/mediqueue.css?v=10">
 </head>
 <body>
 <jsp:include page="/WEB-INF/views/common/admin_nav.jsp"/>
