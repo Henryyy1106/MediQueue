@@ -115,7 +115,9 @@ SELECT ROW_NUMBER() OVER (ORDER BY user_id) AS idx, user_id
 FROM users
 WHERE email LIKE 'seed%@mediqueue.my';
 
--- Appointments: a mix of today's live queue, completed history, future bookings, and one cancelled item.
+-- Appointments: a mix of near-past history, today's live queue, and upcoming
+-- bookings. The date spread intentionally reaches further into the future so
+-- demo dashboards stay populated for longer between reseeds.
 INSERT INTO appointments (user_id, clinic_id, appt_date, time_slot, reason, symptoms, status, urgency_level, ai_notes, admin_notes) VALUES
 (@u_aisyah, @c_taman_jaya, CURDATE(), '09:00 AM', '[DEMO] Fever and sore throat', 'Fever for 2 days with sore throat', 'confirmed', 'routine', 'Hydrate and monitor temperature.', 'Patient checked in at counter.'),
 (@u_daniel, @c_taman_jaya, CURDATE(), '09:30 AM', '[DEMO] Persistent cough', 'Dry cough and mild chest tightness', 'confirmed', 'urgent', 'Assess breathing and oxygen saturation.', 'Priority review requested.'),
@@ -137,13 +139,17 @@ SELECT
         ELSE @c_shah_alam
     END AS clinic_id,
     CASE
-        WHEN n.n <= 12 THEN CURDATE()
-        WHEN n.n <= 20 THEN DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-        WHEN n.n <= 27 THEN DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-        WHEN n.n <= 33 THEN DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-        WHEN n.n <= 38 THEN DATE_SUB(CURDATE(), INTERVAL 4 DAY)
-        WHEN n.n <= 40 THEN DATE_ADD(CURDATE(), INTERVAL 1 DAY)
-        ELSE DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+        WHEN n.n <= 4 THEN DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        WHEN n.n <= 8 THEN DATE_SUB(CURDATE(), INTERVAL 5 DAY)
+        WHEN n.n <= 12 THEN DATE_SUB(CURDATE(), INTERVAL 4 DAY)
+        WHEN n.n <= 16 THEN DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+        WHEN n.n <= 20 THEN DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+        WHEN n.n <= 24 THEN DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+        WHEN n.n <= 30 THEN CURDATE()
+        WHEN n.n <= 34 THEN DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+        WHEN n.n <= 38 THEN DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+        WHEN n.n <= 41 THEN DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+        ELSE DATE_ADD(CURDATE(), INTERVAL 4 DAY)
     END AS appt_date,
     ELT(MOD(n.n - 1, 8) + 1, '08:30 AM', '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '02:00 PM', '03:00 PM') AS time_slot,
     CONCAT('[DEMO-BULK ', LPAD(n.n, 2, '0'), '] ', ELT(MOD(n.n - 1, 6) + 1,
@@ -163,14 +169,14 @@ SELECT
         'Cough, congestion, and fatigue for several days'
     ) AS symptoms,
     CASE
-        WHEN n.n <= 12 THEN CASE
-            WHEN n.n IN (9, 10) THEN 'completed'
-            WHEN n.n = 11 THEN 'cancelled'
-            ELSE 'confirmed'
-        END
-        WHEN n.n <= 38 THEN CASE
-            WHEN MOD(n.n, 7) = 0 THEN 'cancelled'
+        WHEN n.n <= 24 THEN CASE
+            WHEN MOD(n.n, 8) = 0 THEN 'cancelled'
             ELSE 'completed'
+        END
+        WHEN n.n <= 30 THEN CASE
+            WHEN n.n IN (27, 29) THEN 'completed'
+            WHEN n.n = 30 THEN 'cancelled'
+            ELSE 'confirmed'
         END
         ELSE CASE
             WHEN MOD(n.n, 2) = 0 THEN 'confirmed'
@@ -275,6 +281,7 @@ FROM (
        AND existing.queue_date = a.appt_date
     WHERE a.reason LIKE '[DEMO-BULK %'
       AND a.status <> 'cancelled'
+      AND a.appt_date <= DATE_ADD(CURDATE(), INTERVAL 4 DAY)
 ) seeded;
 
 -- Completed visits feed the reports page and patient visit history.
