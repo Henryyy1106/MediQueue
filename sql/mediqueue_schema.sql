@@ -155,7 +155,7 @@ phone = VALUES(phone);
 INSERT INTO clinics (name, address, district, phone, capacity, latitude, longitude) VALUES
 ('Klinik Kesihatan Taman Jaya', 'Jalan Taman Jaya, 46000 Petaling Jaya', 'Petaling Jaya', '03-79572345', 120, 3.1073, 101.6345),
 ('Klinik Kesihatan SS2', 'Jalan SS2/66, 47300 Petaling Jaya', 'Petaling Jaya', '03-78763456', 100, 3.1175, 101.6197),
-('Klinik Kesihatan Kelana Jaya', 'Jalan SS7/2, 47301 Petaling Jaya', 'Subang Jaya', '03-78069876', 90, 3.1073, 101.5936),
+('Klinik Kesihatan Kelana Jaya', 'Jalan SS7/2, 47301 Petaling Jaya', 'Petaling Jaya', '03-78069876', 90, 3.1073, 101.5936),
 ('Klinik Kesihatan Subang Jaya', 'Persiaran Kemajuan, 47500 Subang Jaya', 'Subang Jaya', '03-56312345', 110, 3.0506, 101.5782),
 ('Klinik Kesihatan Shah Alam', 'Jalan Tengku Ampuan Zabedah E 9/E, 40100 Shah Alam', 'Shah Alam', '03-55116789', 150, 3.0738, 101.5183);
 
