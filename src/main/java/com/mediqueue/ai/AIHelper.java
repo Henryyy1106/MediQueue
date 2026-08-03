@@ -211,7 +211,8 @@ public class AIHelper {
                 "Reason for visit: " + reason + "\n" +
                 "Symptoms described: " + symptoms + "\n" +
                 "Outcome/notes: " + (outcome != null ? outcome : "Not recorded") + "\n\n" +
-                "Write a 2-3 sentence summary in plain English. Do not diagnose. Do not include personally identifiable info.";
+                "Write a 2-3 sentence summary in plain English. Do not diagnose. Do not include personally identifiable info. " +
+                "Plain text only — no Markdown formatting (no #, *, **, bullet points, or headings).";
 
         try {
             return callClaude(prompt);
