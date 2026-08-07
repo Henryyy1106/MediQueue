@@ -15,6 +15,9 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
 import java.io.IOException;
 import java.sql.Date;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 /**
@@ -107,6 +110,16 @@ public class AppointmentServlet extends HttpServlet {
         }
 
         Date apptDate = Date.valueOf(dateStr);
+        // Compare the full appointment moment (date + selected time slot) against now,
+        // so today's upcoming slots are allowed and only genuinely past slots are rejected.
+        LocalDateTime apptMoment = LocalDateTime.of(LocalDate.parse(dateStr), LocalTime.parse(timeSlot));
+        if (apptMoment.isBefore(LocalDateTime.now())) {
+            req.setAttribute("error", "Appointment time cannot be in the past.");
+            List<Clinic> clinics = clinicDAO.getAllClinics();
+            req.setAttribute("clinics", clinics);
+            req.getRequestDispatcher("/WEB-INF/views/patient/book_appointment.jsp").forward(req, resp);
+            return;
+        }
 
         // Check slot availability
         if (apptDAO.isTimeSlotTaken(clinicId, apptDate, timeSlot)) {
@@ -172,6 +185,7 @@ public class AppointmentServlet extends HttpServlet {
         int apptId = Integer.parseInt(req.getParameter("apptId"));
         boolean success = apptDAO.cancelAppointment(apptId, user.getUserId());
         if (success) {
+            queueDAO.removeQueueByApptId(apptId);
             resp.sendRedirect(req.getContextPath() + "/patient/appointments?cancelled=true");
         } else {
             resp.sendRedirect(req.getContextPath() + "/patient/appointments?error=cancel_failed");

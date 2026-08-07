@@ -43,8 +43,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Appointment Date *</label>
-                        <input type="date" name="apptDate" class="form-control" required
-                               min="${pageContext.request.contextPath}" id="apptDate">
+                        <input type="date" name="apptDate" class="form-control" required id="apptDate">
                         <div class="form-hint">Select today or a future date</div>
                     </div>
                     <div class="form-group">

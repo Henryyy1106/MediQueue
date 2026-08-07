@@ -88,4 +88,17 @@ public class DatabaseConnection {
 
         return defaultValue;
     }
+
+    public static String getResolvedDbUrl() {
+        return getConfigValue("mediqueue.db.url", "MEDIQUEUE_DB_URL", DEFAULT_URL);
+    }
+
+    public static String getResolvedDbUsername() {
+        return getConfigValue("mediqueue.db.username", "MEDIQUEUE_DB_USERNAME", DEFAULT_USERNAME);
+    }
+
+    public static boolean isClaudeApiConfigured() {
+        String key = System.getenv("CLAUDE_API_KEY");
+        return key != null && !key.isEmpty();
+    }
 }

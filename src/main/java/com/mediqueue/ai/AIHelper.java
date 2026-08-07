@@ -1,5 +1,6 @@
 package com.mediqueue.ai;
 
+import com.mediqueue.dao.AppSettingDAO;
 import com.mediqueue.model.Clinic;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -44,6 +45,8 @@ public class AIHelper {
 
     private static final String CARE_TIPS_DISCLAIMER =
         "This is general guidance only — see the doctor at your appointment.";
+    private static final String DEFAULT_HELP_MESSAGE =
+        "AI features are temporarily unavailable. Please contact clinic staff for assistance.";
 
     private static final String CARE_TIPS_SYSTEM_PROMPT =
         "You are the MediQueue AI Helper providing gentle pre-visit self-care tips to a patient who is " +
@@ -61,12 +64,14 @@ public class AIHelper {
 
     private final HttpClient httpClient;
     private final String apiKey;
+    private final AppSettingDAO settingDAO;
 
     public AIHelper() {
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
         this.apiKey = System.getenv(API_KEY_ENV);
+        this.settingDAO = new AppSettingDAO();
     }
 
     /**
@@ -206,7 +211,8 @@ public class AIHelper {
                 "Reason for visit: " + reason + "\n" +
                 "Symptoms described: " + symptoms + "\n" +
                 "Outcome/notes: " + (outcome != null ? outcome : "Not recorded") + "\n\n" +
-                "Write a 2-3 sentence summary in plain English. Do not diagnose. Do not include personally identifiable info.";
+                "Write a 2-3 sentence summary in plain English. Do not diagnose. Do not include personally identifiable info. " +
+                "Plain text only — no Markdown formatting (no #, *, **, bullet points, or headings).";
 
         try {
             return callClaude(prompt);
@@ -221,7 +227,7 @@ public class AIHelper {
      */
     public String chat(String userMessage, String clinicContext) {
         if (apiKey == null || apiKey.isEmpty()) {
-            return "AI features are temporarily unavailable. Please proceed to your nearest clinic or contact clinic staff for assistance.";
+            return getHelpMessage();
         }
 
         String contextPrompt = clinicContext != null && !clinicContext.isEmpty()
@@ -232,7 +238,7 @@ public class AIHelper {
             return callClaude(contextPrompt + userMessage);
         } catch (Exception e) {
             System.err.println("[AIHelper] chat error: " + e.getMessage());
-            return "AI features are temporarily unavailable. Please contact clinic staff for assistance.";
+            return getHelpMessage();
         }
     }
 
@@ -256,8 +262,9 @@ public class AIHelper {
             if (tips != null && !tips.isBlank()) {
                 tips = tips.trim();
                 // Safety net: guarantee the disclaimer is always present.
-                if (!tips.contains(CARE_TIPS_DISCLAIMER)) {
-                    tips = tips + "\n\n" + CARE_TIPS_DISCLAIMER;
+                String disclaimer = getCareTipsDisclaimer();
+                if (!tips.contains(disclaimer)) {
+                    tips = tips + "\n\n" + disclaimer;
                 }
                 return tips;
             }
@@ -388,7 +395,7 @@ public class AIHelper {
                     "Try to stay calm and relaxed, and let the clinic staff know if you start to feel worse.");
         }
 
-        tips.append("\n\n").append(CARE_TIPS_DISCLAIMER);
+        tips.append("\n\n").append(getCareTipsDisclaimer());
         return tips.toString();
     }
 
@@ -407,5 +414,13 @@ public class AIHelper {
             r.setMessage(best.getName() + " has the shortest current wait (" + best.getEstimatedWaitMins() + " mins).");
         }
         return r;
+    }
+
+    private String getHelpMessage() {
+        return settingDAO.getSettingValue("ai.help_message", DEFAULT_HELP_MESSAGE);
+    }
+
+    private String getCareTipsDisclaimer() {
+        return settingDAO.getSettingValue("ai.fallback_disclaimer", CARE_TIPS_DISCLAIMER);
     }
 }
